@@ -7,12 +7,15 @@ import com.example.demo.Service.BookService;
 import com.example.demo.Service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
@@ -20,8 +23,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,11 +68,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         if(update.hasMessage() && update.getMessage().hasText()){
             List<String> list = getReqest(update.getMessage().getText());
-            if(update.getMessage().getText().contains("/check")){
-
-            }
-            else {
-                String data = list.get(0);
+            String data = list.get(0).trim();
                 switch (data){
                     case "/start" ->{
                         try {
@@ -86,13 +84,53 @@ public class TelegramBot extends TelegramLongPollingBot {
                         }
                     }
                     case "/getbooks" ->{
-                        String str = bookService.getBooks(list, 1);
-                        SendMessage sendMessage = new SendMessage();
-                        sendMessage.setChatId(update.getMessage().getChatId().toString());
-                        sendMessage.setText(str);
-                        getBook(str, update.getMessage().getChatId(), bookService.count(list));
+                        Pair<Integer, String> str = bookService.getBooks(list, 1);
+                        getBook(str.getSecond(), update.getMessage().getChatId(), str.getFirst());
                     }
-                }
+                    case "/getbook" ->{
+                        try {
+                            Pair<String, String> path = bookService.getBook(list, true);
+                            InputFile fileInputStream = new InputFile(new File(path.getSecond()));
+                            SendDocument sendDocument = new SendDocument();
+                            sendDocument.setChatId(update.getMessage().getChatId().toString());
+                            sendDocument.setDocument(fileInputStream);
+                            sendDocument.setCaption(path.getFirst());
+                            execute(sendDocument);
+                            userService.personBooks(update.getMessage().getChatId(), Long.valueOf(list.get(1).split("=")[1]));
+                        } catch (Exception e){
+                            SendMessage sendMessage = new SendMessage();
+                            sendMessage.setText("Не удалось загрузить файл");
+                            sendMessage.setChatId(update.getMessage().getChatId().toString());
+                            executeMessage(sendMessage);
+                        }
+                    }
+                    case "/mybook" -> {
+                        Pair<Integer, String> str = bookService.myBook(update.getMessage().getChatId(), 1);
+                        getBook(str.getSecond(), update.getMessage().getChatId(), str.getFirst());
+                    }
+                    case "/checklist" -> {
+                        if(userService.isAdmin(update.getMessage().getChatId())){
+                            Pair<Integer, String> str = bookService.checkList(update.getMessage().getChatId(), 1);
+                            getBook(str.getSecond(), update.getMessage().getChatId(), str.getFirst());
+                        }
+                    }
+                    case "/check" -> {
+                        try {
+                            Pair<String, String> path = bookService.getBook(list, false);
+                            InputFile fileInputStream = new InputFile(new File(path.getSecond()));
+                            SendDocument sendDocument = new SendDocument();
+                            sendDocument.setChatId(update.getMessage().getChatId().toString());
+                            sendDocument.setDocument(fileInputStream);
+                            sendDocument.setCaption(path.getFirst());
+                            execute(sendDocument);
+                            checkedBook(update.getMessage().getChatId(), Long.valueOf(list.get(1).split("=")[1]));
+                        } catch (Exception e){
+                            SendMessage sendMessage = new SendMessage();
+                            sendMessage.setText("Не удалось загрузить файл");
+                            sendMessage.setChatId(update.getMessage().getChatId().toString());
+                            executeMessage(sendMessage);
+                        }
+                    }
             }
         }
         else if (update.hasCallbackQuery()) {
@@ -111,10 +149,33 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             else if(Character.isDigit(callbackData.charAt(0))){
                 int page = Integer.parseInt(callbackData);
-                String str = update.getCallbackQuery().getMessage().getText().split("\n")[0];
-                List<String> list = getReqest(str);
-                String text = bookService.getBooks(list, page);
-                executeEditMessageTextBooksGet(text, update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), page, bookService.count(list));
+                if (update.getCallbackQuery().getMessage().getText().startsWith("Ваш запрос")) {
+                    String str = update.getCallbackQuery().getMessage().getText().split("\n")[0];
+                    List<String> list = getReqest(str);
+                    Pair<Integer, String> text = bookService.getBooks(list, page);
+                    executeEditMessageTextBooksGet(text.getSecond(), update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), page, text.getFirst());
+                }
+                else if(update.getCallbackQuery().getMessage().getText().startsWith("Мои книги")){
+                    Pair<Integer, String> text = bookService.myBook(update.getCallbackQuery().getMessage().getChatId(), page);
+                    executeEditMessageTextBooksGet(text.getSecond(), update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), page, text.getFirst());
+
+                }
+                else if(update.getCallbackQuery().getMessage().getText().startsWith("Список книг")){
+                    Pair<Integer, String> text = bookService.checkList(update.getCallbackQuery().getMessage().getChatId(), page);
+                    executeEditMessageTextBooksGet(text.getSecond(), update.getCallbackQuery().getMessage().getChatId(), update.getCallbackQuery().getMessage().getMessageId(), page, text.getFirst());
+                }
+            }
+            else if(callbackData.contains("YES_")){
+                Long bookId = Long.valueOf(callbackData.split("_")[1]);
+                bookService.afterCheck(bookId, true);
+                String text = "Книга принята";
+                executeEditMessageText(text, chatId, messageId);
+            }
+            else if(callbackData.contains("NO_")){
+                Long bookId = Long.valueOf(callbackData.split("_")[1]);
+                bookService.afterCheck(bookId, false);
+                String text = "Книга удалена";
+                executeEditMessageText(text, chatId, messageId);
             }
         }
         else if(update.hasMessage() && update.getMessage().hasDocument()){
@@ -124,7 +185,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if(list.size() != 4){
                     SendMessage sendMessage = new SendMessage();
                     sendMessage.setChatId(update.getMessage().getChatId().toString());
-                    sendMessage.setText("Вы не указали один из параметров.\nПопробуйте снова");
+                    sendMessage.setText("Вы не указали один из параметров.\nПопробуйте снова!");
                     executeMessage(sendMessage);
                     return;
                 }
@@ -133,16 +194,21 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 getFileRequest.setFileId(update.getMessage().getDocument().getFileId());
 
-                org.telegram.telegrambots.meta.api.objects.File telegramFile =
-                        null;
+                org.telegram.telegrambots.meta.api.objects.File telegramFile;
                 try {
                     telegramFile = execute(getFileRequest);
                     File file = downloadFile(telegramFile);
-                    File file1 = new File("src/main/resources/books/" + books.getId() + ".pdf");
-                    if(file.renameTo(file1)){
-                        if(file.createNewFile()){
-                            books.setUrlToFile(file1.getPath());
-                            bookService.updateBook(books);
+                    if(telegramFile.getFilePath().split("\\.")[1].equals("pdf")) {
+                        File file1 = new File("src/main/resources/books/" + books.getId() + ".pdf");
+                        if (file.renameTo(file1)) {
+                            if (file.createNewFile()) {
+                                books.setUrlToFile(file1.getPath());
+                                bookService.updateBook(books);
+                                SendMessage sendMessage = new SendMessage();
+                                sendMessage.setChatId(update.getMessage().getChatId().toString());
+                                sendMessage.setText("Сохранение книги прошло успешно. \nОна находится на просмотре администратора");
+                                executeMessage(sendMessage);
+                            }
                         }
                     }
                 } catch (TelegramApiException | IOException e) {
@@ -188,6 +254,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setText(text);
         message.setChatId(chatId.toString());
+        if(count <= 5){
+            executeMessage(message);
+            return;
+        }
         InlineKeyboardMarkup markupInLine = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> rowsInLine = new ArrayList<>();
         List<InlineKeyboardButton> rowInLine = new ArrayList<>();
@@ -227,6 +297,35 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         noButton.setText("No");
         noButton.setCallbackData("NO_BUTTON");
+
+        rowInLine.add(yesButton);
+        rowInLine.add(noButton);
+
+        rowsInLine.add(rowInLine);
+
+        markupInLine.setKeyboard(rowsInLine);
+        message.setReplyMarkup(markupInLine);
+
+        executeMessage(message);
+    }
+
+    public void checkedBook(long chatId, Long bookId){
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText("Book is correct?");
+
+        InlineKeyboardMarkup markupInLine = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInLine = new ArrayList<>();
+        List<InlineKeyboardButton> rowInLine = new ArrayList<>();
+        var yesButton = new InlineKeyboardButton();
+
+        yesButton.setText("Yes");
+        yesButton.setCallbackData("YES_" + bookId);
+
+        var noButton = new InlineKeyboardButton();
+
+        noButton.setText("No");
+        noButton.setCallbackData("NO_" + bookId);
 
         rowInLine.add(yesButton);
         rowInLine.add(noButton);
