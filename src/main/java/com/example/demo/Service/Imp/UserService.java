@@ -1,17 +1,18 @@
-package com.example.demo.Service;
+package com.example.demo.Service.Imp;
 
 import com.example.demo.Entity.Person;
 import com.example.demo.Entity.PersonBooks;
 import com.example.demo.Entity.Role;
 import com.example.demo.Repository.PersonBookRepo;
 import com.example.demo.Repository.UserRepo;
+import com.example.demo.Service.UserServiceInt;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import java.util.Optional;
 
 @Service
-public class UserService {
+public class UserService implements UserServiceInt {
 
     private final UserRepo userRepo;
 
@@ -22,6 +23,7 @@ public class UserService {
         this.personBookRepo = personBookRepo;
     }
 
+    @Override
     public void saveUser(Message msg){
         if(userRepo.getPersonByUserId(msg.getFrom().getId()).isPresent()){
             throw new RuntimeException("User already exist");
@@ -34,7 +36,7 @@ public class UserService {
         person.setRegister(false);
         userRepo.save(person);
     }
-
+    @Override
     public void acceptRegister(Long chatId){
         Optional<Person> person = userRepo.getPersonByChatId(chatId);
         if(person.isPresent()){
@@ -43,7 +45,7 @@ public class UserService {
             userRepo.save(person1);
         }
     }
-
+    @Override
     public void personBooks(Long chatId, Long bookId){
         Optional<Person> person = userRepo.getPersonByChatId(chatId);
         if(person.isPresent()){
@@ -54,7 +56,7 @@ public class UserService {
             personBookRepo.save(personBooks);
         }
     }
-
+    @Override
     public boolean isAdmin(Long chatId){
         Optional<Person> person = userRepo.getPersonByChatId(chatId);
         return person.filter(value -> value.getRole() == Role.ADMIN).isPresent();

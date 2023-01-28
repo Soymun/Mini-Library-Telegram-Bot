@@ -3,8 +3,8 @@ package com.example.demo.Controller;
 
 import com.example.demo.Config.BotConfig;
 import com.example.demo.Entity.Books;
-import com.example.demo.Service.BookService;
-import com.example.demo.Service.UserService;
+import com.example.demo.Service.Imp.BookService;
+import com.example.demo.Service.Imp.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.util.Pair;
@@ -46,7 +46,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         listofCommands.add(new BotCommand("/start", "get a welcome message"));
         listofCommands.add(new BotCommand("/mybook", "get your book"));
         listofCommands.add(new BotCommand("/help", "info how to use this bot"));
-        listofCommands.add(new BotCommand("/settings", "set your preferences"));
         try {
             this.execute(new SetMyCommands(listofCommands, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -131,6 +130,31 @@ public class TelegramBot extends TelegramLongPollingBot {
                             executeMessage(sendMessage);
                         }
                     }
+                    case "/help" -> {
+                        SendMessage sendMessage = new SendMessage();
+                        if(userService.isAdmin(update.getMessage().getChatId())){
+                            String text = """
+                                    Команды:
+                                    1)/getbooks a=Фамилия автора(или название органицазии) n=Название книги g=жанр, поиск книг
+                                    2)/getbook id=Id книги, выдача книги
+                                    3)/mybook, книги которые вы скачали
+                                    4)/checklist, книги на проверке
+                                    5)/check id=Id книги, установить результат проверки книги""";
+                            sendMessage.setText(text);
+                            sendMessage.setChatId(update.getMessage().getChatId().toString());
+                            executeMessage(sendMessage);
+                        }
+                        else {
+                            String text = """
+                                    Команды:
+                                    1)/getbooks a=Фамилия автора(или название органицазии) n=Название книги g=жанр, поиск книг
+                                    2)/getbook id=Id книги, выдача книги
+                                    3)/mybook, книги которые вы скачали""";
+                            sendMessage.setText(text);
+                            sendMessage.setChatId(update.getMessage().getChatId().toString());
+                            executeMessage(sendMessage);
+                        }
+                    }
             }
         }
         else if (update.hasCallbackQuery()) {
@@ -139,7 +163,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             long chatId = update.getCallbackQuery().getMessage().getChatId();
 
             if(callbackData.equals("YES_BUTTON")){
-                String text = "Приветствуем в нашем боте.\nЧтобы найти книги по автору, по названию, по жанру и узнать его ID.\nИспользуйте метод /getbooks с параметрами a,n,g (через пробел),\nгде a - автор, n - название книги, g - жанр.\nЧтобы получить книгу используйте метод /getbook с параметром id, где указываете id книги.\nУдачи найти книгу).";
+                String text = "Приветствуем в нашем боте.\nЧтобы узнать все возможности /help";
                 userService.acceptRegister(update.getCallbackQuery().getMessage().getChatId());
                 executeEditMessageText(text, chatId, messageId);
             }

@@ -1,10 +1,11 @@
-package com.example.demo.Service;
+package com.example.demo.Service.Imp;
 
 import com.example.demo.Entity.*;
 import com.example.demo.Entity.Books_;
 import com.example.demo.Entity.PersonBooks_;
 import com.example.demo.Entity.Person_;
 import com.example.demo.Repository.BookRepo;
+import com.example.demo.Service.BookServiceInt;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.criteria.*;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-public class BookService {
+public class BookService implements BookServiceInt {
 
     private final BookRepo bookRepo;
 
@@ -29,6 +30,7 @@ public class BookService {
     }
 
 
+    @Override
     public Pair<Integer, String> getBooks(List<String> list, int page){
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Books> cq = cb.createQuery(Books.class);
@@ -79,6 +81,7 @@ public class BookService {
         }
     }
 
+    @Override
     public void afterCheck(Long bookId, boolean check){
         Optional<Books> books = bookRepo.getBooksById(bookId);
         if(books.isPresent()){
@@ -93,6 +96,7 @@ public class BookService {
         }
     }
 
+    @Override
     public Books saveBook(List<String> strings){
         Books books = new Books();
         for (String str : strings){
@@ -109,10 +113,12 @@ public class BookService {
         return bookRepo.save(books);
     }
 
+    @Override
     public void updateBook(Books books){
         bookRepo.save(books);
     }
 
+    @Override
     public Pair<String, String> getBook(List<String> strings, boolean checked){
         if(strings.size() == 2){
             Long bookId = Long.parseLong(strings.get(1).split("=")[1]);
@@ -127,6 +133,7 @@ public class BookService {
     }
 
 
+    @Override
     public Pair<Integer, String> myBook(Long chatId, int page){
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Books> cq = cb.createQuery(Books.class);
@@ -160,6 +167,7 @@ public class BookService {
         }
     }
 
+    @Override
     public Pair<Integer, String> checkList(Long chatId, int page){
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Books> cq = cb.createQuery(Books.class);
